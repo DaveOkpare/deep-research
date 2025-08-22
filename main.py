@@ -98,7 +98,3 @@ async def web_fetch(url: str, timeout: int = 30, headers: dict | None = None):
         return await fetch(url, timeout, headers)
     except Exception as e:
         return f"Ran into an error: {e}. Please try again!"
-
-
-if __name__ == "__main__":
-    main()
