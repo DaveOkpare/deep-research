@@ -36,19 +36,30 @@ Anthropic's research helped us see that multi-agent systems excel for "open-ende
 
 ## Designing the Agent Architecture
 
-The solution we settled on follows what Anthropic calls the orchestrator-worker pattern. Instead of trying to build one super-intelligent agent that does everything, we created a hierarchical system with specialized roles:
+The solution we settled on follows what Anthropic calls the orchestrator-worker pattern, but with a key insight: the "sub-agents" are essentially sophisticated tool calls orchestrated by the main agent.
 
-**The Lead Agent** acts as a research coordinator. It analyzes incoming queries, develops research strategies, breaks down complex questions into focused subtasks, and ultimately synthesizes everything into a final report.
+**The Lead Agent** is the main thread of execution. It analyzes queries, develops research strategies, breaks down complex questions into focused subtasks, and synthesizes everything into a final report.
 
-**Sub-Agents** are the specialized research workers. Each one receives a specific research task from the lead agent and uses web search and content extraction tools to gather information. They can make multiple tool calls in parallel, efficiently exploring different sources simultaneously.
+**Sub-Agents** are really specialized tool calls with their own context and capabilities. Instead of calling a simple web search function, the lead agent "calls" a sub-agent that can reason about what to search for, evaluate results, and return structured findings.
 
-This design gives us several advantages over a single-agent approach:
-- **Better fault tolerance**: If one sub-agent encounters an error, the others continue working
-- **Parallel exploration**: Multiple research angles can be pursued simultaneously  
-- **Focused expertise**: Each agent can be optimized for its specific role
-- **Natural scalability**: Adding more sub-agents is straightforward
+```python
+# Traditional approach: Simple tool calls
+search_results = web_search("AI agents")
+content = fetch_url("https://example.com")
 
-The key insight from Anthropic's work is that this pattern works best for "complex tasks where you can't predict the subtasks needed." That perfectly describes open-ended research.
+# Our approach: Sub-agents as intelligent tool calls  
+research_findings = await sub_agent.run("Research current AI agent architectures")
+```
+
+This reframing clarified our thinking significantly. We're not managing communication between truly independent agents. Instead, we have one main agent that uses other agents as intelligent, context-aware tools.
+
+This design gives us several advantages:
+- **Intelligent tool execution**: Each "tool call" can reason about how to accomplish its task
+- **Structured outputs**: Tool calls return rich, formatted data instead of raw text
+- **Focused context**: Each sub-agent has its own context window dedicated to a specific task
+- **Sequential control**: The main agent maintains full control over the research flow
+
+The key insight is that this works well for tasks where you need intelligent decomposition and execution, but don't need truly autonomous agent collaboration.
 
 ## Implementation Journey: Starting Simple
 
@@ -115,35 +126,36 @@ The key insight here is the `parallel_tool_calls` setting for sub-agents. This a
 
 We learned that sequential execution of sub-agents, combined with parallel tool calls within each sub-agent, gives us the best balance of thoroughness and rate limiting. Each sub-agent can explore 3-6 sources in parallel, but we only run one sub-agent at a time to avoid overwhelming external APIs.
 
-## A Key Design Insight: Task Steering vs Tool Parallelism
+## A Key Design Insight: Intelligent Tool Calls vs Parallel Tool Calls
 
-One of the most important lessons we learned was about how to achieve effective parallelism in multi-agent systems. Initially, we tried to rely on the `parallel_tool_calls` feature that many LLMs support, expecting agents to automatically make multiple tool calls simultaneously.
+One of the most important lessons we learned was about how to achieve effective parallelism. Initially, we tried to rely on the `parallel_tool_calls` feature that many LLMs support, expecting a single agent to automatically make multiple tool calls simultaneously.
 
-This approach was unreliable in practice. Agents would sometimes make parallel calls, but other times would inexplicably fall back to sequential execution, ignoring the parallel capability entirely. The behavior was inconsistent and difficult to predict.
+This approach was unreliable in practice. The agent would sometimes make parallel calls, but other times would inexplicably fall back to sequential execution, ignoring the parallel capability entirely. The behavior was inconsistent and difficult to predict.
 
-Our breakthrough came when we shifted from relying on tool-level parallelism to **task-level orchestration**. Instead of asking one agent to make parallel tool calls, we have the lead agent break down research into separate, focused tasks and deploy multiple sub-agents to handle them.
-
-This approach proved much more reliable and effective:
+Our breakthrough came when we reframed the problem: **instead of trying to make dumb tools work in parallel, we create intelligent tool calls that handle their own execution strategy**.
 
 ```python
-# Instead of: One agent making parallel tool calls (unreliable)
-# We use: Multiple agents with focused tasks (reliable)
+# Instead of: One agent making parallel dumb tool calls (unreliable)
+web_search("AI agents")
+web_search("multi-agent systems") 
+web_search("agent orchestration")
 
+# We use: Intelligent tool calls via sub-agents (reliable)
 subtasks = [
-    "Research the technical architecture of X",
-    "Find recent market data about Y", 
-    "Analyze competitive landscape for Z"
+    "Research the technical architecture of AI agents",
+    "Find recent developments in multi-agent systems", 
+    "Analyze different agent orchestration patterns"
 ]
 
-# Deploy sub-agents sequentially, each with parallel tool capabilities
+# Each sub-agent is an intelligent tool call
 for subtask in subtasks:
-    findings = await sub_agent.run(subtask)  # Each sub-agent can still use parallel tools
+    findings = await sub_agent.run(subtask)  # Sub-agent decides its own search strategy
     research_results.append(findings)
 ```
 
-The key insight is that **explicit task decomposition by the lead agent is more reliable than implicit tool parallelization by individual agents**. The lead agent is better at understanding what can be done in parallel and creating appropriate task boundaries.
+The key insight is that **intelligent tool calls (sub-agents) that can reason about their execution are more reliable than trying to parallelize simple tool calls**. Each sub-agent can decide internally whether to make parallel web searches, how to evaluate results, and when it has gathered sufficient information.
 
-This design pattern turned out to be one of our most important discoveries about effective multi-agent orchestration.
+This pattern - treating sub-agents as sophisticated, reasoning tool calls rather than autonomous agents - turned out to be one of our most important architectural decisions.
 
 ## Streaming the Research Process
 
@@ -221,7 +233,7 @@ The `to_markdown()` method is particularly useful for streaming. We can convert 
 
 Building this system taught us several fundamental lessons about multi-agent architectures that every AI engineer should know:
 
-**Task-level orchestration beats tool-level parallelism**: As we discovered, having a lead agent explicitly break down tasks and coordinate sub-agents is far more reliable than hoping individual agents will make parallel tool calls consistently.
+**Intelligent tool calls beat parallel tool calls**: As we discovered, treating sub-agents as reasoning tool calls that can handle their own execution strategy is far more reliable than trying to parallelize simple tool calls.
 
 **Sequential coordination, parallel execution**: Running sub-agents one at a time while allowing each to use parallel tools internally gives the best balance of thoroughness and reliability. Trying to run everything in parallel often backfires due to rate limits and coordination complexity.
 
@@ -283,7 +295,7 @@ These insights have changed how we approach AI system design more broadly, even 
 
 **For other AI engineers considering similar projects**: Start with replicating something like Anthropic's research agent. The domain is complex enough to surface real multi-agent challenges, but well-defined enough to make progress quickly. You'll learn more about AI systems in a few weeks than months of single-agent work.
 
-The key patterns we discovered, especially task-level orchestration over tool-level parallelism, apply far beyond research agents. They're fundamental principles for any system where you need multiple AI agents to work together effectively.
+The key patterns we discovered, especially treating sub-agents as intelligent tool calls rather than autonomous agents, apply far beyond research agents. They're fundamental principles for any system where you need AI agents to handle complex, multi-step tasks.
 
 **The broader lesson**: Multi-agent systems aren't just about building more complex AI applications. They're about understanding how to decompose complex problems in ways that AI can solve reliably. That's a skill that will become increasingly valuable as AI capabilities continue to grow.
 
