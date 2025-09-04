@@ -1,8 +1,6 @@
 # Building a Multi-Agent Research System
 
-I built a multi-agent research system based on Anthropic's approach to understand how these architectures work in practice. The system breaks research queries into focused subtasks, runs specialized agents on each, then synthesizes results into structured reports.
-
-## Architecture Overview
+This weekend I decided to build a multi-agent research system based on Anthropic's approach to demonstrate how these architectures work in practice. The system breaks research queries into focused subtasks, runs specialized agents on each, then synthesizes results into structured reports.
 
 The system uses an orchestrator-worker pattern. The lead agent analyzes queries, breaks them into subtasks, and coordinates sub-agents. Sub-agents handle focused research areas and return structured findings.
 
@@ -11,11 +9,9 @@ Key benefits observed:
 - **Context isolation**: Sub-agents maintain dedicated context windows  
 - **Parallel execution**: Multiple research threads run simultaneously
 
-This mirrors Anthropic's [multi-agent research system](https://www.anthropic.com/engineering/multi-agent-research-system) approach but treats sub-agents as intelligent tool calls rather than autonomous agents.
+This mirrors Anthropic's [multi-agent research system](https://www.anthropic.com/engineering/multi-agent-research-system) approach and treats sub-agents as intelligent tool calls rather than autonomous agents.
 
-## Implementation Details
-
-The core insight: sub-agents work as intelligent tool calls rather than independent agents.
+The core insight of the orchestrator-worker pattern is that the sub-agents work as intelligent tool calls rather than independent agents.
 
 ```python
 # Traditional approach: Simple tool calls
@@ -26,13 +22,9 @@ content = fetch_url("https://example.com")
 research_findings = await sub_agent.run("Research current AI agent architectures")
 ```
 
-This reframing changed everything. Instead of managing complex inter-agent communication, we have one lead agent that uses other agents as sophisticated, reasoning tools.
+This reframing changes everything. Instead of managing complex inter-agent communication, we have one lead agent that uses other agents as sophisticated, reasoning tools.
 
 The lead agent handles query analysis, task decomposition, and result synthesis. Sub-agents focus on specific research areas and return structured findings with their own context windows.
-
-## Setup
-
-Built with [Pydantic AI](https://ai.pydantic.dev) for structured outputs:
 
 ```python
 from pydantic_ai import Agent
@@ -53,12 +45,12 @@ sub_agent = Agent[DateDeps, SubagentFindings](
 )
 ```
 
-Orchestration implementation:
+The orchestration works through a tool called `run_subagent` where the lead agent provides a list of tasks. These tasks get distributed among subagents and run concurrently, with results gathered and returned to the lead agent as a tool result.
 
 ```python
 @lead_agent.tool
 async def run_subagent(ctx: RunContext[DateDeps], tasks: SubagentTasks):
-    """Run subagents sequentially. Each task should be specific and focused."""
+    """Run subagents concurrently. Each task should be specific and focused."""
     results = await asyncio.gather(
         *[
             sub_agent.run(
@@ -73,7 +65,7 @@ async def run_subagent(ctx: RunContext[DateDeps], tasks: SubagentTasks):
 
 ## Execution Strategy
 
-Sub-agents run sequentially to avoid API rate limits, but each sub-agent uses parallel tool calls internally.
+Sub-agents run concurrently, and each sub-agent uses tools designed for concurrent/parallel calls internally.
 
 ```python
 # Each sub-agent can make multiple searches simultaneously
@@ -90,7 +82,7 @@ async def web_fetch(url: str, timeout: int = 30):
 
 ## Structured Outputs
 
-Using Pydantic models for all agent outputs:
+Using Pydantic models for all agent outputs ensures consistency across multiple agents. When sub-agents return unstructured text, the lead agent must parse and interpret varying formats, which introduces errors and inconsistency. Structured outputs guarantee that each agent returns data in the expected format, making synthesis reliable. This becomes critical when coordinating multiple agents - the lead agent can confidently access specific fields like `key_insights` or `confidence_level` without parsing natural language responses.
 
 ```python
 class SubagentFindings(BaseModel):
@@ -110,11 +102,11 @@ class ResearchReport(BaseModel):
         # Built-in conversion for streaming
 ```
 
-Benefits: consistent structure, type safety, streaming support, predictable frontend integration.
+This approach provides consistent structure across all agents, type safety to catch errors early, streaming support for real-time updates, and predictable integration with frontend components.
 
 ## Streaming Implementation
 
-Converts partial Pydantic objects to incremental markdown:
+The streaming system converts partial Pydantic objects to incremental markdown as research progresses:
 
 ```python
 async def stream_research_response(user_prompt: str, message_id: str):
@@ -136,7 +128,6 @@ Key findings:
 - Intelligent tool calls more reliable than parallel tool calls
 - Orchestration works better as coordination rather than autonomous communication  
 - Structured outputs become essential with multiple agents
-- Added complexity needs to justify benefits over single-agent approaches
 
 ## Use Cases
 
@@ -152,9 +143,12 @@ Single agents work better for:
 
 ## Implementation
 
-Built with:
-- Pydantic AI for structured outputs
-- FastAPI for streaming responses
-- Async processing throughout
+The system is built on Pydantic AI for structured agent outputs, FastAPI for streaming responses, and async processing throughout for efficient coordination. The complete implementation is available at [https://github.com/daveokpare/deep-research](https://github.com/daveokpare/deep-research).
 
-The patterns extend beyond research to any complex, multi-step AI tasks requiring reliable coordination.
+These patterns extend beyond research to any complex, multi-step AI tasks requiring reliable coordination between multiple agents.
+
+## Future Work
+
+This project lacks proper citations and comprehensive evaluation metrics comparing single vs multi-agent performance.
+
+Adding evaluation metrics would make this a more complete demo project by measuring research quality, completion time, and accuracy against baselines.
