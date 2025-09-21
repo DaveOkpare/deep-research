@@ -19,6 +19,7 @@ model = "gpt-4.1-mini"
 
 class AgentState(TypedDict, total=False):  # total=False makes all keys optional
     messages: list
+    verification: str
     research_brief: str
 
 
@@ -34,7 +35,7 @@ class ClarifyWithUser(BaseModel):
     )
 
 
-def clarify_with_user(state: AgentState, query: str) -> str:
+def clarify_with_user(state: AgentState, query: str) -> str | None:
     instructions = f"""You are a research query analyzer. Your task is to determine if a user's research query contains sufficient information to proceed with comprehensive research, or if clarification is needed.
 
 Analyze the user's query and consider these factors:
@@ -82,5 +83,35 @@ When query is sufficient:
     if response.needs_clarification:
         return response.question
     else:
-        return response.verification
+        state["verification"] = response.verification
 
+
+def write_research_brief(state: AgentState) -> str:
+    instructions = """
+You are a research brief writer. Your task is to convert the provided message into a comprehensive research brief that guides a researcher on what to investigate.
+
+Your responsibilities:
+1. Analyze the provided message to understand the research intent
+2. Transform it into a structured research brief suitable for a researcher
+3. Ensure the brief provides clear guidance on what to investigate and how
+
+Research Brief Structure:
+- **Research Objective**: Clear statement of what needs to be investigated
+- **Key Questions**: 3-5 specific questions the research should answer
+- **Scope & Focus**: Boundaries of what should and shouldn't be included
+- **Research Methods**: Suggested approaches (academic sources, industry reports, expert interviews, etc.)
+- **Success Criteria**: What constitutes comprehensive research on this topic
+
+Reframe topics as research opportunities:
+- Personal preferences → Research on criteria and options
+- Subjective topics → Research on perspectives, trends, and data
+- Direct action requests → Research on best practices and approaches
+
+Return a structured research brief that gives a researcher clear direction on what to investigate.
+    """
+
+    response = client.responses.create(
+        model=model, instructions=instructions, input=state["verification"]
+    )
+
+    return response.output_text
